@@ -3,11 +3,10 @@ use crate::{
     langs::ENG_WORDSLIST,
     util::{Bits, Bits11},
 };
-use rustc_hash::FxHashMap;
-use zeroize::Zeroize;
 
 pub struct WordMap {
-    inner: FxHashMap<&'static str, Bits11>,
+    // inner: FxHashMap<&'static str, Bits11>,
+    inner: &'static [&'static str],
 }
 
 pub struct WordList {
@@ -16,9 +15,9 @@ pub struct WordList {
 
 impl WordMap {
     pub fn get_bits(&self, word: &str) -> Result<Bits11, ErrorKind> {
-        match self.inner.get(word) {
-            Some(n) => Ok(*n),
-            None => Err(ErrorKind::InvalidWord)?,
+        match self.inner.binary_search(&word) {
+            Ok(n) => Ok((n as u16).into()),
+            _ => Err(ErrorKind::InvalidWord)?,
         }
     }
 }
@@ -44,7 +43,7 @@ mod lazy {
     use crate::langs::ENG_WORDSLIST;
 
     use super::{Bits11, WordList, WordMap};
-    use once_cell::sync::Lazy;
+    // use once_cell::sync::Lazy;
 
     /// lazy generation of the word list
     // fn gen_wordlist(lang_words: &'static str) -> WordList {
@@ -57,13 +56,13 @@ mod lazy {
 
     /// lazy generation of the word map
     fn gen_wordmap(wordlist: &WordList) -> WordMap {
-        let inner = wordlist
-            .inner
-            .iter()
-            .enumerate()
-            .map(|(i, item)| (*item, Bits11::from(i as u16)))
-            .collect();
-
+        // let inner = wordlist
+        //     .inner
+        //     .iter()
+        //     .enumerate()
+        //     .map(|(i, item)| (*item, Bits11::from(i as u16)))
+        //     .collect();
+        let inner = wordlist.inner;
         WordMap { inner }
     }
 
@@ -91,11 +90,11 @@ mod lazy {
     // pub static WORDLIST_SPANISH: Lazy<WordList> =
     //     Lazy::new(|| gen_wordlist(include_str!("langs/spanish.txt")));
 
-    pub static WORDMAP_ENGLISH: Lazy<WordMap> = Lazy::new(|| {
-        gen_wordmap(&WordList {
-            inner: ENG_WORDSLIST,
-        })
-    });
+    // pub static WORDMAP_ENGLISH: Lazy<WordMap> = Lazy::new(|| {
+    //     gen_wordmap(&WordList {
+    //         inner: ENG_WORDSLIST,
+    //     })
+    // });
     // #[cfg(feature = "chinese-simplified")]
     // pub static WORDMAP_CHINESE_SIMPLIFIED: Lazy<WordMap> =
     //     Lazy::new(|| gen_wordmap(&WORDLIST_CHINESE_SIMPLIFIED));
@@ -122,8 +121,7 @@ mod lazy {
 ///
 /// [Mnemonic]: ./mnemonic/struct.Mnemonic.html
 /// [Seed]: ./seed/struct.Seed.html
-#[derive(Debug, Clone, Copy, PartialEq, Zeroize)]
-#[zeroize(drop)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Language {
     English,
     #[cfg(feature = "chinese-simplified")]
@@ -146,8 +144,8 @@ impl Language {
     /// Construct a word list from its language code. Returns None
     /// if the language code is not valid or not supported.
     pub fn from_language_code(language_code: &str) -> Option<Self> {
-        match &language_code.to_ascii_lowercase()[..] {
-            "en" => Some(Language::English),
+        match language_code {
+            "en" | "EN" | "En" => Some(Language::English),
             #[cfg(feature = "chinese-simplified")]
             "zh-hans" => Some(Language::ChineseSimplified),
             #[cfg(feature = "chinese-traditional")]
@@ -202,9 +200,12 @@ impl Language {
     ///
     /// The index of an individual word in the word list is used as the binary value of that word
     /// when the phrase is turned into a [`Seed`][Seed].
-    pub fn wordmap(&self) -> &'static WordMap {
+    pub fn wordmap(&self) -> WordMap {
         match *self {
-            Language::English => &lazy::WORDMAP_ENGLISH,
+            Language::English => WordMap {
+                inner: ENG_WORDSLIST,
+            },
+            // Language::English => &lazy::WORDMAP_ENGLISH,
             // #[cfg(feature = "chinese-simplified")]
             // Language::ChineseSimplified => &lazy::WORDMAP_CHINESE_SIMPLIFIED,
             // #[cfg(feature = "chinese-traditional")]
@@ -264,6 +265,7 @@ mod test {
     }
 
     #[allow(unused)]
+    #[cfg(feature = "std")]
     fn is_wordlist_nfkd(wl: &WordList) -> bool {
         for idx in 0..2047 {
             let word = wl.get_word(idx.into());
