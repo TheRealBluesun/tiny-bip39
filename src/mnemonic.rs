@@ -204,7 +204,10 @@ impl Mnemonic {
         let mut bits = BitWriter::<U33>::new();
 
         for word in phrase.split(" ") {
-            bits.push(wordmap.get_bits(&word)?);
+            let cleaned_word = word.trim();
+            if !cleaned_word.is_empty() {
+                bits.push(wordmap.get_bits(&cleaned_word)?);
+            }
         }
 
         let mtype = MnemonicType::for_word_count(bits.len() / 11)?;

@@ -123,7 +123,7 @@ where
     }
 
     pub fn len(&self) -> usize {
-        self.inner.len() * 8 + self.offset
+        (self.inner.len() * 8) + self.offset
     }
 
     pub fn into_bytes(mut self) -> Vec<u8, B> {

@@ -38,8 +38,7 @@ hmac = {version="0.8.1", default-features=false}
 pbkdf2 = { version = "0.4.0", default-features = false }
 rand = {version="0.7.3", optional=true}
 unicode-normalization = {version="0.1.13", optional=true}
-# zeroize = { version = "1.1.1", features = ["zeroize_derive"] }
 heapless = "*"
 
 [dev-dependencies]
-hex = "0.4.2"
+hex = {version="0.4.2"}
