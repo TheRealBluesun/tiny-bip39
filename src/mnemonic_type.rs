@@ -1,6 +1,6 @@
-use std::fmt;
-use anyhow::Error;
 use crate::error::ErrorKind;
+#[cfg(feature = "std")]
+use std::fmt;
 
 const ENTROPY_OFFSET: usize = 8;
 
@@ -51,7 +51,7 @@ impl MnemonicType {
     ///
     /// let mnemonic_type = MnemonicType::for_word_count(12).unwrap();
     /// ```
-    pub fn for_word_count(size: usize) -> Result<MnemonicType, Error> {
+    pub fn for_word_count(size: usize) -> Result<MnemonicType, ErrorKind> {
         let mnemonic_type = match size {
             12 => MnemonicType::Words12,
             15 => MnemonicType::Words15,
@@ -75,7 +75,7 @@ impl MnemonicType {
     ///
     /// let mnemonic_type = MnemonicType::for_key_size(128).unwrap();
     /// ```
-    pub fn for_key_size(size: usize) -> Result<MnemonicType, Error> {
+    pub fn for_key_size(size: usize) -> Result<MnemonicType, ErrorKind> {
         let mnemonic_type = match size {
             128 => MnemonicType::Words12,
             160 => MnemonicType::Words15,
@@ -109,7 +109,7 @@ impl MnemonicType {
     /// ```
     ///
     /// [MnemonicType::entropy_bits()]: ./enum.MnemonicType.html#method.entropy_bits
-    pub fn for_phrase(phrase: &str) -> Result<MnemonicType, Error> {
+    pub fn for_phrase(phrase: &str) -> Result<MnemonicType, ErrorKind> {
         let word_count = phrase.split(" ").count();
 
         Self::for_word_count(word_count)
@@ -188,6 +188,7 @@ impl Default for MnemonicType {
     }
 }
 
+#[cfg(feature = "std")]
 impl fmt::Display for MnemonicType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(

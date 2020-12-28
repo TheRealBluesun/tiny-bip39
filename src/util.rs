@@ -1,29 +1,31 @@
-use unicode_normalization::Decompositions;
+use heapless::{ArrayLength, Vec};
+// use unicode_normalization::Decompositions;
 
+// #[cfg(feature = "std")]
 pub(crate) trait IterExt: Iterator {
-    fn join<R>(&mut self, glue: &str) -> R
-    where
-        R: From<String>,
-        Self::Item: Joinable,
-    {
-        let first = match self.next() {
-            Some(first) => first,
-            None => return String::new().into(),
-        };
+    // fn join<R>(&mut self, glue: &str) -> R
+    // where
+    //     R: From<&'static str> + Default,
+    //     Self::Item: Joinable,
+    // {
+    //     let first = match self.next() {
+    //         Some(first) => first,
+    //         None => return R::default().into(),
+    //     };
 
-        let (lower, _) = self.size_hint();
+    //     let (lower, _) = self.size_hint();
 
-        let mut buffer = String::with_capacity(lower * (10 + glue.len()));
+    //     let mut buffer = String::with_capacity(lower * (10 + glue.len()));
 
-        first.write_into(&mut buffer);
+    //     first.write_into(&mut buffer);
 
-        for item in self {
-            buffer.push_str(glue);
-            item.write_into(&mut buffer);
-        }
+    //     for item in self {
+    //         buffer.push_str(glue);
+    //         item.write_into(&mut buffer);
+    //     }
 
-        buffer.into()
-    }
+    //     buffer.into()
+    // }
 
     fn bits<Out>(self) -> BitIter<Self::Item, Out, Self>
     where
@@ -32,24 +34,6 @@ pub(crate) trait IterExt: Iterator {
         Self: Sized,
     {
         BitIter::new(self)
-    }
-}
-
-pub(crate) trait Joinable {
-    fn write_into(self, buf: &mut String);
-}
-
-/// Allow iterator joining on str slices
-impl Joinable for &str {
-    fn write_into(self, buf: &mut String) {
-        buf.push_str(self);
-    }
-}
-
-/// Allow iterator joining on unicode_normalization iterators
-impl<I: Iterator<Item = char>> Joinable for Decompositions<I> {
-    fn write_into(self, buf: &mut String) {
-        buf.extend(self);
     }
 }
 
@@ -100,35 +84,39 @@ impl From<Bits11> for u16 {
     }
 }
 
-pub(crate) struct BitWriter {
+pub(crate) struct BitWriter<B: ArrayLength<u8>> {
     offset: usize,
     remainder: u32,
-    inner: Vec<u8>,
+    inner: Vec<u8, B>,
 }
 
-impl BitWriter {
-    pub fn with_capacity(capacity: usize) -> Self {
-        let mut bytes = capacity / 8;
+impl<B> BitWriter<B>
+where
+    B: ArrayLength<u8>,
+{
+    pub fn new() -> Self {
+        // let mut bytes = capacity / 8;
 
-        if capacity % 8 != 0 {
-            bytes += 1;
-        }
+        // if capacity % 8 != 0 {
+        //     bytes += 1;
+        // }
 
         Self {
             offset: 0,
             remainder: 0,
-            inner: Vec::with_capacity(bytes),
+            inner: Vec::<u8, B>::new(),
         }
     }
 
-    pub fn push<B: Bits>(&mut self, source: B) {
-        let shift = 32 - B::SIZE;
+    pub fn push<B2: Bits>(&mut self, source: B2) {
+        let shift = 32 - B2::SIZE;
 
         self.remainder |= (source.bits() << shift) >> self.offset;
-        self.offset += B::SIZE;
+        self.offset += B2::SIZE;
 
         while self.offset >= 8 {
-            self.inner.push((self.remainder >> 24) as u8);
+            // TODO: something on Err?
+            let _ = self.inner.push((self.remainder >> 24) as u8);
             self.remainder <<= 8;
             self.offset -= 8;
         }
@@ -138,9 +126,10 @@ impl BitWriter {
         self.inner.len() * 8 + self.offset
     }
 
-    pub fn into_bytes(mut self) -> Vec<u8> {
+    pub fn into_bytes(mut self) -> Vec<u8, B> {
         if self.offset != 0 {
-            self.inner.push((self.remainder >> 24) as u8);
+            // TODO: something on Err?
+            let _ = self.inner.push((self.remainder >> 24) as u8);
         }
 
         self.inner
@@ -148,7 +137,7 @@ impl BitWriter {
 }
 
 pub(crate) struct BitIter<In: Bits, Out: Bits, I: Iterator<Item = In> + Sized> {
-    _phantom: ::std::marker::PhantomData<Out>,
+    _phantom: core::marker::PhantomData<Out>,
     source: I,
     read: usize,
     buffer: u64,
@@ -164,7 +153,7 @@ where
         let source = source.into_iter();
 
         BitIter {
-            _phantom: ::std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             source,
             read: 0,
             buffer: 0,

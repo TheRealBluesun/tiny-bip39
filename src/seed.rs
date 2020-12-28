@@ -1,8 +1,9 @@
-use std::fmt;
-use unicode_normalization::UnicodeNormalization;
-use zeroize::Zeroize;
 use crate::crypto::pbkdf2;
 use crate::mnemonic::Mnemonic;
+use heapless::{consts::*, String};
+#[cfg(feature = "std")]
+use std::fmt;
+// use unicode_normalization::UnicodeNormalization;
 
 /// The secret value used to derive HD wallet addresses from a [`Mnemonic`][Mnemonic] phrase.
 ///
@@ -20,10 +21,9 @@ use crate::mnemonic::Mnemonic;
 /// [Seed]: ./seed/struct.Seed.html
 /// [Seed::as_bytes()]: ./seed/struct.Seed.html#method.as_bytes
 
-#[derive(Clone, Zeroize)]
-#[zeroize(drop)]
+#[derive(Clone)]
 pub struct Seed {
-    bytes: Vec<u8>,
+    bytes: [u8; 64],
 }
 
 impl Seed {
@@ -31,9 +31,14 @@ impl Seed {
     ///
     /// [Mnemonic]: ./mnemonic/struct.Mnemonic.html
     pub fn new(mnemonic: &Mnemonic, password: &str) -> Self {
-        let salt = format!("mnemonic{}", password);
-        let normalized_salt = salt.nfkd().to_string();
-        let bytes = pbkdf2(mnemonic.phrase().as_bytes(), &normalized_salt);
+        // let salt = password; //format!("mnemonic{}", password);
+        // let normalized_salt = salt.nfkd();
+        // let bytes = pbkdf2(mnemonic.phrase().as_bytes(), normalized_salt);
+
+        let mut salt = String::<U128>::from("mnemonic");
+        // TODO: error case?
+        let _ = salt.push_str(password);
+        let bytes = pbkdf2(mnemonic.phrase().as_bytes(), salt.as_bytes());
 
         Self { bytes }
     }
@@ -50,12 +55,14 @@ impl AsRef<[u8]> for Seed {
     }
 }
 
+#[cfg(feature = "std")]
 impl fmt::Debug for Seed {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:#X}", self)
     }
 }
 
+#[cfg(feature = "std")]
 impl fmt::LowerHex for Seed {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if f.alternate() {
@@ -70,6 +77,7 @@ impl fmt::LowerHex for Seed {
     }
 }
 
+#[cfg(feature = "std")]
 impl fmt::UpperHex for Seed {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if f.alternate() {
@@ -84,6 +92,7 @@ impl fmt::UpperHex for Seed {
     }
 }
 
+#[cfg(feature = "std")]
 #[cfg(test)]
 mod test {
     use super::*;
@@ -105,7 +114,12 @@ mod test {
         assert_eq!(format!("{:#X}", seed), "0x0BDE96F14C35A66235478E0C16C152FCAF6301E4D9A81D3FEBC50879FE7E5438E6A8DD3E39BDF3AB7B12D6B44218710E17D7A2844EE9633FAB0E03D9A6C8569B");
     }
 
-    fn test_unicode_normalization(lang: Language, phrase: &str, password: &str, expected_seed_hex: &str) {
+    fn test_unicode_normalization(
+        lang: Language,
+        phrase: &str,
+        password: &str,
+        expected_seed_hex: &str,
+    ) {
         let mnemonic = Mnemonic::from_phrase(phrase, lang).unwrap();
         let seed = Seed::new(&mnemonic, password);
         assert_eq!(format!("{:x}", seed), expected_seed_hex);

@@ -1,3 +1,4 @@
+#![cfg_attr(not(feature = "std"), no_std)]
 //!
 //! This is a Rust implementation of the [bip39][bip39-standard] standard for Bitcoin HD wallet
 //! mnemonic phrases.
@@ -7,7 +8,7 @@
 //!
 //! ## Quickstart
 //!
-//! ```rust
+//! ```no_compile
 //! use bip39::{Mnemonic, MnemonicType, Language, Seed};
 //!
 //! /// create a new randomly generated mnemonic phrase
@@ -28,6 +29,7 @@
 //! ```
 //!
 mod error;
+pub(crate) mod langs;
 mod language;
 mod mnemonic;
 mod mnemonic_type;

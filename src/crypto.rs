@@ -5,9 +5,9 @@
 //! [Seed]: ../seed/struct.Seed.html
 //!
 
-extern crate rand;
-use self::rand::{thread_rng, RngCore};
 use hmac::Hmac;
+#[cfg(feature = "std")]
+use rand::{thread_rng, RngCore};
 use sha2::Digest;
 
 const PBKDF2_ROUNDS: u32 = 2048;
@@ -19,6 +19,7 @@ pub(crate) fn sha256_first_byte(input: &[u8]) -> u8 {
     sha2::Sha256::digest(input)[0]
 }
 
+#[cfg(feature = "std")]
 /// Random byte generator, used to create new mnemonics
 ///
 pub(crate) fn gen_random_bytes(byte_length: usize) -> Vec<u8> {
@@ -34,10 +35,10 @@ pub(crate) fn gen_random_bytes(byte_length: usize) -> Vec<u8> {
 /// [Mnemonic]: ../mnemonic/struct.Mnemonic.html
 /// [Seed]: ../seed/struct.Seed.html
 ///
-pub(crate) fn pbkdf2(input: &[u8], salt: &str) -> Vec<u8> {
-    let mut seed = vec![0u8; PBKDF2_BYTES];
+pub(crate) fn pbkdf2(input: &[u8], salt: &[u8]) -> [u8; PBKDF2_BYTES] {
+    let mut seed = [0u8; PBKDF2_BYTES];
 
-    pbkdf2::pbkdf2::<Hmac<sha2::Sha512>>(input, salt.as_bytes(), PBKDF2_ROUNDS, &mut seed);
+    pbkdf2::pbkdf2::<Hmac<sha2::Sha512>>(input, salt, PBKDF2_ROUNDS, &mut seed);
 
     seed
 }

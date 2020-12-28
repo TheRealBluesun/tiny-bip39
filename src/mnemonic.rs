@@ -1,13 +1,19 @@
-use std::fmt;
-use anyhow::Error;
-use std::mem;
-use unicode_normalization::UnicodeNormalization;
-use zeroize::Zeroize;
-use crate::crypto::{gen_random_bytes, sha256_first_byte};
+#[cfg(feature = "std")]
+use crate::crypto::gen_random_bytes;
+use crate::crypto::sha256_first_byte;
 use crate::error::ErrorKind;
 use crate::language::Language;
 use crate::mnemonic_type::MnemonicType;
-use crate::util::{checksum, BitWriter, IterExt};
+use crate::util::checksum;
+use crate::util::BitWriter;
+use crate::util::IterExt;
+// use anyhow::Error;
+use heapless::{consts::*, String, Vec};
+#[cfg(feature = "std")]
+use std::fmt;
+// use unicode_normalization::UnicodeNormalization;
+
+type PhraseStrType = String<U512>;
 
 /// The primary type in this crate, most tasks require creating or using one.
 ///
@@ -34,12 +40,11 @@ use crate::util::{checksum, BitWriter, IterExt};
 /// [Seed::new()]: ./seed/struct.Seed.html#method.new
 /// [Seed::as_bytes()]: ./seed/struct.Seed.html#method.as_bytes
 ///
-#[derive(Clone, Zeroize)]
-#[zeroize(drop)]
+#[derive(Clone)]
 pub struct Mnemonic {
-    phrase: String,
+    phrase: PhraseStrType,
     lang: Language,
-    entropy: Vec<u8>,
+    entropy: Vec<u8, U33>,
 }
 
 impl Mnemonic {
@@ -62,10 +67,11 @@ impl Mnemonic {
     ///
     /// [Mnemonic]: ./mnemonic/struct.Mnemonic.html
     /// [Mnemonic::phrase()]: ./mnemonic/struct.Mnemonic.html#method.phrase
+    #[cfg(feature = "std")]
     pub fn new(mtype: MnemonicType, lang: Language) -> Mnemonic {
         let entropy = gen_random_bytes(mtype.entropy_bits() / 8);
 
-        Mnemonic::from_entropy_unchecked(entropy, lang)
+        Mnemonic::from_entropy_unchecked(&entropy, lang)
     }
 
     /// Create a [`Mnemonic`][Mnemonic] from pre-generated entropy
@@ -79,22 +85,19 @@ impl Mnemonic {
     /// let mnemonic = Mnemonic::from_entropy(entropy, Language::English).unwrap();
     ///
     /// assert_eq!("crop cash unable insane eight faith inflict route frame loud box vibrant", mnemonic.phrase());
-    /// assert_eq!("33E46BB13A746EA41CDDE45C90846A79", format!("{:X}", mnemonic));
+    /// //assert_eq!("33E46BB13A746EA41CDDE45C90846A79", format!("{:X}", mnemonic));
     /// ```
     ///
     /// [Mnemonic]: ../mnemonic/struct.Mnemonic.html
-    pub fn from_entropy(entropy: &[u8], lang: Language) -> Result<Mnemonic, Error> {
+    pub fn from_entropy(entropy: &[u8], lang: Language) -> Result<Mnemonic, ErrorKind> {
         // Validate entropy size
         MnemonicType::for_key_size(entropy.len() * 8)?;
 
         Ok(Self::from_entropy_unchecked(entropy, lang))
     }
 
-    fn from_entropy_unchecked<E>(entropy: E, lang: Language) -> Mnemonic
-    where
-        E: Into<Vec<u8>>,
-    {
-        let entropy = entropy.into();
+    fn from_entropy_unchecked(entropy: &[u8], lang: Language) -> Mnemonic {
+        let entropy = Vec::<u8, U33>::from_slice(entropy).unwrap();
         let wordlist = lang.wordlist();
 
         let checksum_byte = sha256_first_byte(&entropy);
@@ -108,12 +111,19 @@ impl Mnemonic {
         //
         // Given the entropy is of correct size, this ought to give us the correct word
         // count.
-        let phrase = entropy
+        let mut phrase = String::<U512>::new();
+        entropy
             .iter()
             .chain(Some(&checksum_byte))
             .bits()
             .map(|bits| wordlist.get_word(bits))
-            .join(" ");
+            .for_each(|s| {
+                let _ = phrase.push_str(s);
+                let _ = phrase.push(' ');
+            });
+        let _ = phrase.pop();
+
+        // .join(" ");
 
         Mnemonic {
             phrase,
@@ -139,17 +149,19 @@ impl Mnemonic {
     /// ```
     ///
     /// [Mnemonic]: ../mnemonic/struct.Mnemonic.html
-    pub fn from_phrase(phrase: &str, lang: Language) -> Result<Mnemonic, Error> {
-        let phrase = phrase
-            .split_whitespace()
-            .map(|w| w.nfkd())
-            .join::<String>(" ");
+    pub fn from_phrase(phrase: &str, lang: Language) -> Result<Mnemonic, ErrorKind> {
+        // let phrase = phrase
+        //     .split_whitespace()
+        //     // .map(|w| w.nfkd().collect())
+        //     .collect();
+        // .join::<&'static str>(" ");
 
         // this also validates the checksum and phrase length before returning the entropy so we
         // can store it. We don't use the validate function here to avoid having a public API that
         // takes a phrase string and returns the entropy directly.
-        let entropy = Mnemonic::phrase_to_entropy(&phrase, lang)?;
-
+        let entropy = Mnemonic::phrase_to_entropy(phrase, lang)?;
+        // TODO handle double whitespace
+        let phrase = PhraseStrType::from(phrase);
         let mnemonic = Mnemonic {
             phrase,
             lang,
@@ -173,7 +185,7 @@ impl Mnemonic {
     ///
     /// assert!(Mnemonic::validate(test_mnemonic, Language::English).is_ok());
     /// ```
-    pub fn validate(phrase: &str, lang: Language) -> Result<(), Error> {
+    pub fn validate(phrase: &str, lang: Language) -> Result<(), ErrorKind> {
         Mnemonic::phrase_to_entropy(phrase, lang)?;
 
         Ok(())
@@ -184,11 +196,12 @@ impl Mnemonic {
     /// Only intended for internal use, as returning a `Vec<u8>` that looks a bit like it could be
     /// used as the seed is likely to cause problems for someone eventually. All the other functions
     /// that return something like that are explicit about what it is and what to use it for.
-    fn phrase_to_entropy(phrase: &str, lang: Language) -> Result<Vec<u8>, Error> {
+    fn phrase_to_entropy(phrase: &str, lang: Language) -> Result<Vec<u8, U33>, ErrorKind> {
         let wordmap = lang.wordmap();
 
         // Preallocate enough space for the longest possible word list
-        let mut bits = BitWriter::with_capacity(264);
+        // 264 / 8 = 33 bytes
+        let mut bits = BitWriter::<U33>::new();
 
         for word in phrase.split(" ") {
             bits.push(wordmap.get_bits(&word)?);
@@ -213,10 +226,10 @@ impl Mnemonic {
         let expected_checksum = checksum(checksum_byte, mtype.checksum_bits());
 
         if actual_checksum != expected_checksum {
-            Err(ErrorKind::InvalidChecksum)?;
+            Err(ErrorKind::InvalidChecksum)
+        } else {
+            Ok(entropy)
         }
-
-        Ok(entropy)
     }
 
     /// Get the mnemonic phrase as a string reference.
@@ -225,10 +238,11 @@ impl Mnemonic {
     }
 
     /// Consume the `Mnemonic` and return the phrase as a `String`.
-    pub fn into_phrase(mut self) -> String {
+    pub fn into_phrase(self) -> PhraseStrType {
         // Create an empty string and swap values with the mnemonic's phrase.
         // This allows `Mnemonic` to implement `Drop`, while still returning the phrase.
-        mem::replace(&mut self.phrase, String::new())
+        // mem::replace(&mut self.phrase, String::new())
+        self.phrase
     }
 
     /// Get the original entropy value of the mnemonic phrase as a slice.
@@ -265,18 +279,21 @@ impl AsRef<str> for Mnemonic {
     }
 }
 
+#[cfg(feature = "std")]
 impl fmt::Display for Mnemonic {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Display::fmt(self.phrase(), f)
     }
 }
 
+#[cfg(feature = "std")]
 impl fmt::Debug for Mnemonic {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self.phrase(), f)
     }
 }
 
+#[cfg(feature = "std")]
 impl fmt::LowerHex for Mnemonic {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if f.alternate() {
@@ -291,6 +308,7 @@ impl fmt::LowerHex for Mnemonic {
     }
 }
 
+#[cfg(feature = "std")]
 impl fmt::UpperHex for Mnemonic {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if f.alternate() {
@@ -305,13 +323,14 @@ impl fmt::UpperHex for Mnemonic {
     }
 }
 
-impl From<Mnemonic> for String {
-    fn from(val: Mnemonic) -> String {
+impl<'a> From<Mnemonic> for PhraseStrType {
+    fn from(val: Mnemonic) -> PhraseStrType {
         val.into_phrase()
     }
 }
 
 #[cfg(test)]
+#[cfg(feature = "std")]
 mod test {
     use super::*;
 
@@ -353,6 +372,7 @@ mod test {
         assert_eq!(entropy, mnemonic.entropy());
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn mnemonic_format() {
         let mnemonic = Mnemonic::new(MnemonicType::Words15, Language::English);
@@ -360,6 +380,7 @@ mod test {
         assert_eq!(mnemonic.phrase(), format!("{}", mnemonic));
     }
 
+    #[cfg(feature = "std")]
     #[test]
     fn mnemonic_hex_format() {
         let entropy = &[
