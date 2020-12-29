@@ -47,6 +47,10 @@ impl Seed {
     pub fn as_bytes(&self) -> &[u8] {
         &self.bytes
     }
+
+    pub fn from_bytes(bytes: [u8; 64]) -> Self {
+        Self { bytes }
+    }
 }
 
 impl AsRef<[u8]> for Seed {
