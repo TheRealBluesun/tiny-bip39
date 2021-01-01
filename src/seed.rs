@@ -53,6 +53,12 @@ impl Seed {
     }
 }
 
+impl Drop for Seed {
+    fn drop(&mut self) {
+        self.bytes.iter_mut().for_each(|b| *b = 0)
+    }
+}
+
 impl AsRef<[u8]> for Seed {
     fn as_ref(&self) -> &[u8] {
         self.as_bytes()
