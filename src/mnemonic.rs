@@ -47,6 +47,15 @@ pub struct Mnemonic {
     entropy: Vec<u8, U33>,
 }
 
+impl Drop for Mnemonic {
+    fn drop(&mut self) {
+        self.entropy.iter_mut().for_each(|b| *b = 0);
+        unsafe { self.phrase.as_mut_vec().iter_mut().for_each(|b| *b = 0) }
+        // TODO: add an "Unset" enum to not leak any information
+        self.lang = Language::English
+    }
+}
+
 impl Mnemonic {
     /// Generates a new [`Mnemonic`][Mnemonic]
     ///
@@ -240,14 +249,6 @@ impl Mnemonic {
         &self.phrase
     }
 
-    /// Consume the `Mnemonic` and return the phrase as a `String`.
-    pub fn into_phrase(self) -> PhraseStrType {
-        // Create an empty string and swap values with the mnemonic's phrase.
-        // This allows `Mnemonic` to implement `Drop`, while still returning the phrase.
-        // mem::replace(&mut self.phrase, String::new())
-        self.phrase
-    }
-
     /// Get the original entropy value of the mnemonic phrase as a slice.
     ///
     /// # Example
@@ -323,12 +324,6 @@ impl fmt::UpperHex for Mnemonic {
         }
 
         Ok(())
-    }
-}
-
-impl<'a> From<Mnemonic> for PhraseStrType {
-    fn from(val: Mnemonic) -> PhraseStrType {
-        val.into_phrase()
     }
 }
 
