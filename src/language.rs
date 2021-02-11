@@ -1,11 +1,10 @@
 use crate::error::ErrorKind;
 use crate::{
-    langs::ENG_WORDSLIST,
+    langs::*,
     util::{Bits, Bits11},
 };
 
 pub struct WordMap {
-    // inner: FxHashMap<&'static str, Bits11>,
     inner: &'static [&'static str],
 }
 
@@ -15,10 +14,11 @@ pub struct WordList {
 
 impl WordMap {
     pub fn get_bits(&self, word: &str) -> Result<Bits11, ErrorKind> {
-        match self.inner.binary_search(&word) {
-            Ok(n) => Ok((n as u16).into()),
-            _ => Err(ErrorKind::InvalidWord(word.into()))?,
-        }
+        self.inner
+            .binary_search(&word)
+            .map(|n| n as u16)
+            .map(Into::into)
+            .map_err(|_| ErrorKind::InvalidWord(word.into()))
     }
 }
 
@@ -72,7 +72,7 @@ impl Language {
         match language_code {
             "en" | "EN" | "En" => Some(Language::English),
             #[cfg(feature = "chinese-simplified")]
-            "zh-hans" => Some(Language::ChineseSimplified),
+            "zh-hans" | "Zh-Hans" | "ZH-HANS" => Some(Language::ChineseSimplified),
             #[cfg(feature = "chinese-traditional")]
             "zh-hant" => Some(Language::ChineseTraditional),
             #[cfg(feature = "french")]
@@ -94,6 +94,10 @@ impl Language {
         match *self {
             Language::English => WordList {
                 inner: ENG_WORDSLIST,
+            },
+            #[cfg(feature = "chinese-simplified")]
+            Language::ChineseSimplified => WordList {
+                inner: ZH_WORDSLIST,
             },
             // Language::English => &lazy::WORDLIST_ENGLISH,
             // #[cfg(feature = "chinese-simplified")]
@@ -130,6 +134,10 @@ impl Language {
             Language::English => WordMap {
                 inner: ENG_WORDSLIST,
             },
+            #[cfg(feature = "chinese-simplified")]
+            Language::ChineseSimplified => WordMap {
+                inner: ZH_WORDSLIST,
+            },
             // Language::English => &lazy::WORDMAP_ENGLISH,
             // #[cfg(feature = "chinese-simplified")]
             // Language::ChineseSimplified => &lazy::WORDMAP_CHINESE_SIMPLIFIED,
@@ -157,7 +165,7 @@ impl Default for Language {
 
 #[cfg(test)]
 mod test {
-    use crate::langs::ENG_WORDSLIST;
+    use crate::langs::*;
 
     use super::Language;
     use super::WordList;
@@ -204,7 +212,10 @@ mod test {
     #[test]
     #[cfg(feature = "chinese-simplified")]
     fn chinese_simplified_wordlist_is_nfkd() {
-        assert!(is_wordlist_nfkd(&lazy::WORDLIST_CHINESE_SIMPLIFIED));
+        let wl = &WordList {
+            inner: ZH_WORDSLIST,
+        };
+        assert!(is_wordlist_nfkd(&wl));
     }
 
     #[test]

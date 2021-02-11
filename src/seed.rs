@@ -1,8 +1,8 @@
 use crate::crypto::pbkdf2;
 use crate::mnemonic::Mnemonic;
-use heapless::{consts::*, String};
 #[cfg(feature = "std")]
-use std::fmt;
+use core::fmt;
+use heapless::{consts::*, String};
 // use unicode_normalization::UnicodeNormalization;
 
 /// The secret value used to derive HD wallet addresses from a [`Mnemonic`][Mnemonic] phrase.
@@ -65,14 +65,12 @@ impl AsRef<[u8]> for Seed {
     }
 }
 
-#[cfg(feature = "std")]
 impl fmt::Debug for Seed {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:#X}", self)
     }
 }
 
-#[cfg(feature = "std")]
 impl fmt::LowerHex for Seed {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if f.alternate() {
@@ -87,7 +85,6 @@ impl fmt::LowerHex for Seed {
     }
 }
 
-#[cfg(feature = "std")]
 impl fmt::UpperHex for Seed {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if f.alternate() {
@@ -102,7 +99,6 @@ impl fmt::UpperHex for Seed {
     }
 }
 
-#[cfg(feature = "std")]
 #[cfg(test)]
 mod test {
     use super::*;

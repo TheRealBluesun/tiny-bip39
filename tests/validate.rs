@@ -18,6 +18,7 @@ mod rand_tests {
         for mtype in types {
             for _ in 0..1000 {
                 let m1 = Mnemonic::new(*mtype, lang);
+                println!("{:#?}", &m1);
                 let m2 = Mnemonic::from_phrase(m1.phrase(), lang).expect("Can create a Mnemonic");
 
                 assert_eq!(m1.entropy(), m2.entropy());
